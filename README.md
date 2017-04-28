@@ -1,1 +1,1 @@
-# Recurrent_Soft_Attention_Model
+# Recurrent Soft Attention Model
