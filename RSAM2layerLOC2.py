@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.autograd import Variable
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from numpy import *
 import numpy as np 
 import torch.nn.init as init
@@ -64,7 +64,8 @@ classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 seq=args.seq
-
+set_printoptions(threshold='nan')
+torch.set_printoptions(profile="full")
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
@@ -77,22 +78,25 @@ class Net(nn.Module):
         self.convo1 = nn.Conv2d(32, 4, kernel_size=1)
         #self.conv12 = nn.Conv2d(32, 64, kernel_size=5,padding=2) 
         # self.rnn0 = nn.RNNCell(1024,1024, nonlinearity='relu')
-        self.conv21 = nn.Conv2d(3,8, kernel_size=3,padding=1)
+        self.conv21 = nn.Conv2d(3,8, kernel_size=5,padding=2)
         #self.convo1 = nn.Conv2d(32, 16, kernel_size=1)
-        self.conv22 = nn.Conv2d(8, 16, kernel_size=3,padding=1)
-        self.conv23 = nn.Conv2d(16, 32, kernel_size=3,padding=1)
+        self.conv22 = nn.Conv2d(8, 16, kernel_size=5,padding=2)
+        self.conv23 = nn.Conv2d(16, 16, kernel_size=3,padding=1)
+
         self.rnn1 = nn.LSTMCell(256,256) 
         # self.convo3 = nn.Conv2d(32, 16, kernel_size=1)
         self.BN1 =nn.BatchNorm2d(8)
         self.BN2 =nn.BatchNorm2d(16)
+
+        self.BN22 =nn.BatchNorm2d(16)
         self.BN3 =nn.BatchNorm2d(32)
         self.BN02 =nn.BatchNorm2d(16)
         self.BN03 =nn.BatchNorm2d(32)
         self.BN4=nn.BatchNorm2d(64)
         self.BN5 =nn.BatchNorm2d(128)
         self.BN6 =nn.BatchNorm1d(256)
-        self.BN0 =nn.BatchNorm1d(2)
-        self.fc1 = nn.Linear(256, 2)
+        self.BN0 =nn.BatchNorm1d(1024)
+        self.fc1 = nn.Linear(256, 1024)
         self.fc2 = nn.Linear(2, 256)
         self.fc3 = nn.Linear(256, 10)
         self.fc4 = nn.Linear(192, 256)
@@ -104,10 +108,16 @@ class Net(nn.Module):
         # self.fc3 = nn.Linear(84, 10)         
 
     def forward(self, x,target):
-        hidden0=(Variable(torch.zeros(x.size(0), self.nhid0).cuda()),
+        if args.cuda:
+            hidden0=(Variable(torch.zeros(x.size(0), self.nhid0).cuda()),
                 Variable(torch.zeros(x.size(0), self.nhid0).cuda()))
-        hidden=(Variable(torch.zeros(x.size(0), self.nhid).cuda()),
-                Variable(torch.zeros(x.size(0), self.nhid).cuda()))       
+            hidden=(Variable(torch.zeros(x.size(0), self.nhid).cuda()),
+                Variable(torch.zeros(x.size(0), self.nhid).cuda()))  
+        else:
+            hidden0=(Variable(torch.zeros(x.size(0), self.nhid0)),
+                Variable(torch.zeros(x.size(0), self.nhid0)))
+            hidden=(Variable(torch.zeros(x.size(0), self.nhid)),
+                Variable(torch.zeros(x.size(0), self.nhid)))                   
         alist=[]
         output=[]
         h=[]
@@ -120,10 +130,14 @@ class Net(nn.Module):
             xr=xc.view(-1,256)
             hidden0=self.rnn0(xr,hidden0)
             lt=F.relu(self.BN0(self.fc1(hidden0[0])))
-            l=Variable(lt.data)
-            l=(l-torch.mean(l,0).repeat(l.size(0),1))/torch.std(l,0).repeat(l.size(0),1)
-            #l=2*(l0-0.5)
-            l=torch.clamp(l, min=-1, max=1)
+            lt=lt.view(-1,32,32)
+            alist.append(lt[3])
+            lt=torch.stack([lt,lt,lt],dim=1) 
+            #print(xI)
+            # l=Variable(lt.data)
+            # l=(l-torch.mean(l,0).repeat(l.size(0),1))/torch.std(l,0).repeat(l.size(0),1)
+            # #l=2*(l0-0.5)
+            # l=torch.clamp(l, min=-1, max=1)
             #l=2*(l-0.5)
             #l.append(lt)
             #print(l)
@@ -131,29 +145,32 @@ class Net(nn.Module):
             # t2=l[:,1]*2
             # c1=t1*7+16
             # c2=t2+16
-            c1=l[:,0]*12+16
-            c2=l[:,1]*12+16
-            alist.append((c1[8].int(),c2[8].int()))
-            c1=c1.int().cpu().data.numpy()
-            c2=c2.int().cpu().data.numpy()
-            tlist=[]
-            for j in range(x.size(0)):
-                xt=x[j].narrow(1,c1[j]-4,8)  
-                xt=xt.narrow(2,c2[j]-4,8)
-                tlist.append(xt)
-            xI=torch.stack(tlist)
+            # c1=l[:,0]*12+16
+            # c2=l[:,1]*12+16
+            # alist.append((c1[8].int(),c2[8].int()))
+            # c1=c1.int().cpu().data.numpy()
+            # c2=c2.int().cpu().data.numpy()
+            # tlist=[]
+            # for j in range(x.size(0)):
+            #     xt=x[j].narrow(1,c1[j]-4,8)  
+            #     xt=xt.narrow(2,c2[j]-4,8)
+            #     tlist.append(xt)
+            # xI=torch.stack(tlist)
             # xc= F.relu(F.max_pool2d(self.BN3(self.conv21(xI)),2))
             # xc=xc.view(-1,512)
             # xc=xI.view(-1,192)
             # xr=F.relu(self.BN6(self.fc4(xc)))
+            x0=Variable(x.data,requires_grad=False)
+            xI=torch.mul(lt,x0)
             xc= F.relu(F.max_pool2d(self.BN1(self.conv21(xI)),2))
-            xc= F.relu(self.BN2(self.conv22(xc)))
+            xc= F.relu(F.max_pool2d(self.BN2(self.conv22(xc)),2))
+            xc= F.relu(F.max_pool2d(self.BN22(self.conv23(xc)),2))
             #xc= F.relu(self.BN3(self.conv23(xc)))
             xc=xc.view(-1,256)
             # xr=F.relu(self.BN6(self.fc5(xc)))          
-            xl=F.relu(self.BN6(self.fc2(lt)))
-            xr=torch.mul(xl,xr)
-            hidden=self.rnn1(xr,hidden)
+            # xl=F.relu(self.BN6(self.fc2(lt)))
+            # xr=torch.mul(xl,xr)
+            hidden=self.rnn1(xc,hidden)
             hidden0=self.rnn0(hidden[0],hidden0)
             xe= F.log_softmax(F.relu(self.fc3(hidden[0])))
             output.append(xe)
@@ -197,10 +214,9 @@ def train(epoch,lr,f):
         optimizer = optim.SGD(model.parameters(), lr=lr, momentum=args.momentum,weight_decay=0.0001)
         optimizer.zero_grad()
         output,l=model(data,target)
-        loss = F.nll_loss(output[0], target)
-        for i in range(1,seq):
+        loss = F.nll_loss(output[-1], target)
+        for i in range(seq-1):
             loss = F.nll_loss(output[i], target)+loss
-        #loss/=6
         loss.backward()
         optimizer.step()
         train_loss+=loss.data[0]
@@ -222,13 +238,12 @@ def test(epoch,f):
         data, target = Variable(data, volatile=True), Variable(target)
         output,l= model(data,target)
 
-        test_loss += F.nll_loss(output[0], target).data[0]
+        test_loss += F.nll_loss(output[-1], target).data[0]
 
-        out = output[0]
-        for i in range(1,seq):
-            out= output[i]+out
-            test_loss += F.nll_loss(output[i], target).data[0]
-        #test_loss /= 6
+        out = output[-1]
+        for i in range(seq-1):
+           out= output[i]+out
+           test_loss += F.nll_loss(output[i], target).data[0]
         _,pred = torch.max(out.data,1)
         #pred = out.data.max(1)[1] # get the index of the max log-probability
         correct += pred.eq(target.data).cpu().sum()
