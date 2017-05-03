@@ -171,7 +171,7 @@ class Net(nn.Module):
             # xl=F.relu(self.BN6(self.fc2(lt)))
             # xr=torch.mul(xl,xr)
             hidden=self.rnn1(xc,hidden)
-            hidden0=self.rnn0(hidden[0],hidden0)
+            hidden0=self.rnn0(hidden[0],hidden0)#feedback mechanism
             xe= F.log_softmax(F.relu(self.fc3(hidden[0])))
             output.append(xe)
             # if self.training:
