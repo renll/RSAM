@@ -1,15 +1,17 @@
 from __future__ import print_function
 import argparse
 import torch
+import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.autograd import Variable
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from numpy import *
 import numpy as np 
 import torch.nn.init as init
+from PIL import Image, ImageDraw
 
 # Training settings
 parser = argparse.ArgumentParser(description='Recurrent Soft Attention Model')
@@ -37,7 +39,9 @@ parser.add_argument('--normalization', action='store_true', default=False,
                     help='enable batch normalization')
 parser.add_argument('--verbose', action='store_true', default=False,
                     help='enable verbose display')
-parser.add_argument('--seq', type=int, default=6, metavar='S',
+parser.add_argument('--lastout', action='store_true', default=False,
+                    help='enable verbose display')
+parser.add_argument('--seq', type=int, default=4, metavar='S',
                     help='random seed (default: 1)')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -55,17 +59,18 @@ transform=transforms.Compose([transforms.ToTensor(),
                              ])
 trainset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
 train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size,
-                                          shuffle=True, num_workers=16)
+                                          shuffle=True, num_workers=2)
 
 testset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
 test_loader = torch.utils.data.DataLoader(testset, batch_size=args.test_batch_size,
-                                          shuffle=False, num_workers=16)
+                                          shuffle=True, num_workers=2)
 classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
 seq=args.seq
 set_printoptions(threshold='nan')
 torch.set_printoptions(profile="full")
+
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
@@ -122,6 +127,7 @@ class Net(nn.Module):
         output=[]
         h=[]
         c=0
+        alist.append(x[3].data)
         for i in range(seq):
             x1=x.clone()
             xc= F.relu(F.max_pool2d(self.BN02(self.conv1(x1)), 2))
@@ -131,7 +137,7 @@ class Net(nn.Module):
             hidden0=self.rnn0(xr,hidden0)
             lt=F.relu(self.BN0(self.fc1(hidden0[0])))
             lt=lt.view(-1,32,32)
-            alist.append(lt[3])
+          #  alist.append(lt[3])
             lt=torch.stack([lt,lt,lt],dim=1) 
             #print(xI)
             # l=Variable(lt.data)
@@ -162,6 +168,7 @@ class Net(nn.Module):
             # xr=F.relu(self.BN6(self.fc4(xc)))
             x0=Variable(x.data,requires_grad=False)
             xI=torch.mul(lt,x0)
+            alist.append(xI[3].data)
             xc= F.relu(F.max_pool2d(self.BN1(self.conv21(xI)),2))
             xc= F.relu(F.max_pool2d(self.BN2(self.conv22(xc)),2))
             xc= F.relu(F.max_pool2d(self.BN22(self.conv23(xc)),2))
@@ -171,7 +178,7 @@ class Net(nn.Module):
             # xl=F.relu(self.BN6(self.fc2(lt)))
             # xr=torch.mul(xl,xr)
             hidden=self.rnn1(xc,hidden)
-            hidden0=self.rnn0(hidden[0],hidden0)#feedback mechanism
+            hidden0=self.rnn0(hidden[0],hidden0)
             xe= F.log_softmax(F.relu(self.fc3(hidden[0])))
             output.append(xe)
             # if self.training:
@@ -196,6 +203,9 @@ class Net(nn.Module):
             #l=2*(l-0.5)
         #hidden[0]=hidden0
         #print(output)
+        alist=torch.stack(alist)
+        #print (alist)
+        alist=alist/2+0.5
         return output,alist
 
    
@@ -203,6 +213,12 @@ model = Net()
 
 if args.cuda:
     model.cuda()
+
+def imshow(img,epoch):
+    img = img / 2 + 0.5 # unnormalize
+    npimg = img.cpu().numpy()
+    img10= Image.fromarray(np.uint8(np.transpose(npimg, (1,2,0))))
+    img10.save('{}.bmp'.format(epoch))
 
 def train(epoch,lr,f):
     model.train()
@@ -215,18 +231,22 @@ def train(epoch,lr,f):
         optimizer.zero_grad()
         output,l=model(data,target)
         loss = F.nll_loss(output[-1], target)
-        for i in range(seq-1):
-            loss = F.nll_loss(output[i], target)+loss
+        if not args.lastout:
+            for i in range(seq-1):
+                loss = F.nll_loss(output[i], target)+loss
         loss.backward()
         optimizer.step()
         train_loss+=loss.data[0]
+        if epoch>=0:
+            torchvision.utils.save_image(l,'{}.png'.format(epoch))
         if batch_idx % args.log_interval == 0 and args.verbose:
-            print(l,file=f)
+            #print(l,file=f)
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.data[0]))
     train_loss /= len(train_loader) 
     return train_loss
+
 
 def test(epoch,f):
     model.eval()
@@ -241,16 +261,19 @@ def test(epoch,f):
         test_loss += F.nll_loss(output[-1], target).data[0]
 
         out = output[-1]
-        for i in range(seq-1):
-           out= output[i]+out
-           test_loss += F.nll_loss(output[i], target).data[0]
+        if not args.lastout:
+            for i in range(seq-1):
+                out= output[i]+out
+                test_loss += F.nll_loss(output[i], target).data[0]
         _,pred = torch.max(out.data,1)
         #pred = out.data.max(1)[1] # get the index of the max log-probability
         correct += pred.eq(target.data).cpu().sum()
     test_loss = test_loss
     test_loss /= len(test_loader)# loss function already averages over batch size
     test_accuracy=100. * correct / len(test_loader.dataset)
-    print(l,file=f)
+    #print(l,file=f)
+    if epoch>=0:
+        torchvision.utils.save_image(l,'{}.png'.format(epoch))
     print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         test_accuracy))
@@ -260,7 +283,7 @@ trainCurveY=[]
 accCurveY=[]
 CurveX=[]
 lr=0.01
-f=open("outputl{}.txt".format(args.seq),'w+')
+f=open("outputl{}{}.txt".format(args.seq,args.lastout),'w+')
 
 for epoch in range(1, args.epochs + 1):
     train_loss=train(epoch,lr,f)
@@ -277,5 +300,3 @@ for epoch in range(1, args.epochs + 1):
 print(CurveX)
 print(accCurveY)
 print(trainCurveY)
-
-
