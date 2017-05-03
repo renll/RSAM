@@ -7,6 +7,7 @@ General Model Structure:
 The weighted context information, i.e. the soft attention, is fed into the model through the down-sample network that consists of a 1x1 feature-map down-sampling convolutional layer in each glimpse timestamp.
 
 ![The attention masked images](https://github.com/renll/RSAM/raw/master/aas.png)
+
 The soft attention masked images generated for each glimpse.
 
 # Related Works
