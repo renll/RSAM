@@ -1,14 +1,14 @@
 # Recurrent Soft Attention Model
 General Model Structure:
-
 ![RSAM structure for 1 timestamp](https://github.com/renll/RSAM/raw/master/333.png)
-
 
 The weighted context information, i.e. the soft attention, is fed into the model through the down-sample network that consists of a 1x1 feature-map down-sampling convolutional layer in each glimpse timestamp.
 
 ![The attention masked images](https://github.com/renll/RSAM/raw/master/aas.png)
 
 The soft attention masked images generated for each glimpse.
+
+The arxiv link of the [paper](https://arxiv.org/abs/1705.01921)
 
 # Related Works
 [1] J. Ba, V. Mnih, and K. Kavukcuoglu. Multiple object recognition with visual attention. arXiv preprint arXiv:1412.7755, 2014. 
