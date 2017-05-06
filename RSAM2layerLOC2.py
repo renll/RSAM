@@ -21,7 +21,7 @@ parser.add_argument('--test-batch-size', type=int, default=128, metavar='N',
                     help='input batch size for testing (default: 1000)')
 parser.add_argument('--epochs', type=int, default=20, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
+parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                     help='learning rate (default: 0.01)')
 parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                     help='SGD momentum (default: 0.5)')
@@ -213,12 +213,8 @@ model = Net()
 
 if args.cuda:
     model.cuda()
-
-def imshow(img,epoch):
-    img = img / 2 + 0.5 # unnormalize
-    npimg = img.cpu().numpy()
-    img10= Image.fromarray(np.uint8(np.transpose(npimg, (1,2,0))))
-    img10.save('{}.bmp'.format(epoch))
+    
+optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum,weight_decay=0.0001)
 
 def train(epoch,lr,f):
     model.train()
@@ -227,7 +223,8 @@ def train(epoch,lr,f):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         data, target = Variable(data), Variable(target)
-        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=args.momentum,weight_decay=0.0001)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
         optimizer.zero_grad()
         output,l=model(data,target)
         loss = F.nll_loss(output[-1], target)
@@ -282,7 +279,7 @@ def test(epoch,f):
 trainCurveY=[]
 accCurveY=[]
 CurveX=[]
-lr=0.01
+lr=args.lr
 f=open("outputl{}{}.txt".format(args.seq,args.lastout),'w+')
 
 for epoch in range(1, args.epochs + 1):
